@@ -1,0 +1,53 @@
+1. Qual é o endereço IP dos nós maple e willow?
+    Os endereços de IP destes nós são:
+
+    maple:  maple.csail.mit.edu
+    willow: willow.csail.mit.edu.
+
+2. Qual é o endereço MAC dos nós maple e willow?
+    A partir dos dados fornecidos, podemos saber apenas o endereço MAC do nó maple.
+
+    maple:  00:16:ea:8d:e5:8a
+
+3. Qual é a porta TCP usada pelos nós maple e willow?
+    Os nós maple e willow utilizam portas diferentes para se comunicar. O nó maple utiliza a porta 5001 e o nó willow a porta 39675
+
+4. Quantos kilobytes foram transferidos durante essa sessão TCP? Qual foi a duração da sessão? Baseda nas respostas anterirores, qual é a vazão (em Kilobytes/segundo) do fluxo TCP entre willow e maple?
+    Nessa sessão TCP, foram transferido 1573 kylobytes. Ela durou 3,134s, o que nos dá uma vazão de 501,914 kylobytes/segundo.
+
+5. Qual é o round-trip time (RTT), em segundos, entre willow e maple baseado no pacote 1473:2921 e seu acknowledgement? Veja o arquivo tcpdump.txt e encontre o RTT do pacote 13057:14505. Por que esses dois valores são diferentes?
+
+    01:34:41.474225 IP willow.csail.mit.edu.39675 > maple.csail.mit.edu.5001: Flags [.], seq 1473:2921, ack 1, win 115, options [nop,nop,TS val 282136474 ecr 282202089], length 1448
+    01:34:41.482047 IP maple.csail.mit.edu.5001 > willow.csail.mit.edu.39675: Flags [.], ack 2921, win 159, options [nop,nop,TS val 282202095 ecr 282136474], length 0
+
+    Para o pacote 1473:2921, o roundtrip time foi de 8 millisegundos.
+
+    01:34:41.474992 IP willow.csail.mit.edu.39675 > maple.csail.mit.edu.5001: Flags [.], seq 13057:14505, ack 1, win 115, options [nop,nop,TS val 282136474 ecr 282202090], length 1448
+    01:34:41.499373 IP maple.csail.mit.edu.5001 > willow.csail.mit.edu.39675: Flags [.], ack 14505, win 331, options [nop,nop,TS val 282202114 ecr 282136474], length 0
+
+    Para o pacote 13057:14505, o roundtrip time foi de 25 millisegundos. O RTT deste pacote foi bem maior pois haviam muitos pacotes sendo enviados em um intervalo de tempo curto e este pacote ficou congestionado na rede.
+
+6. Identifique os procedimentos three-way handshake e connection termination. Coloque as mensagens envolvidas em uma tabela e, para cada um dos procedimentos, inclua a fonte, o destino e informações das mensagens.
+
+    Three-way handshake
+
+    1- 01:34:41.473518 IP willow.csail.mit.edu.39675 > maple.csail.mit.edu.5001: Flags [S], seq 1258159963, win 14600, options [mss 1460,sackOK,TS val 282136473 ecr 0,nop,wscale 7], length 0
+    2- 01:34:41.474055 IP maple.csail.mit.edu.5001 > willow.csail.mit.edu.39675: Flags [S.], seq 2924083256, ack 1258159964, win 14480, options [mss 1460,sackOK,TS val 282202089 ecr 282136473,nop,wscale 7], length 0
+    3- 01:34:41.474079 IP willow.csail.mit.edu.39675 > maple.csail.mit.edu.5001: Flags [.], ack 1, win 115, options [nop,nop,TS val 282136474 ecr 282202089], length 0
+
+        Fonte       Destino     Mensagem
+    1   willow      maple       Mensagem com a flag SYN e sequence 1258159963 (Primeiro passo do handshake)
+    2   maple       willow      Mensagem com as flags SYN e ACK, sequence 2924083256 e ack 1258159964 (Segundo passo do handshake)
+    3   willow      maple       Mensagem com a flag ACK e ack 1 (Terceiro passo do handshake, estabelecendo uma conexão TCP)
+
+
+Connection terminate
+
+    1- 01:34:44.311921 IP willow.csail.mit.edu.39675 > maple.csail.mit.edu.5001: Flags [FP.], seq 1572017:1572889, ack 1, win 115, options [nop,nop,TS val 282139311 ecr 282204927], length 872
+    2- 01:34:44.339007 IP maple.csail.mit.edu.5001 > willow.csail.mit.edu.39675: Flags [F.], seq 1, ack 1572890, win 905, options [nop,nop,TS val 282204955 ecr 282139320], length 0
+    3- 01:34:44.339015 IP willow.csail.mit.edu.39675 > maple.csail.mit.edu.5001: Flags [.], ack 2, win 115, options [nop,nop,TS val 282139339 ecr 282204955], length 0
+
+        Fonte       Destino     Mensagem
+    1   willow      maple       Mensagem com as flags FIN, PUSH e ACK, com sequence 1572017:1572889 e ack 1 (Notificação de término de conexão)
+    2   maple       willow      Mensagem com as flags FIN e ACK, com sequence 1 e ack 1572890 (Acknowledge de término de conexão)
+    3   willow      maple       Mensagem com a flag ACK e ack 2 (Acknowledge de conexão encerrada com sucesso)
