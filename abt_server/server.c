@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
             
             // Verifica se cliente possui dados a serem lidos
             if (clients[i] >= 0 && FD_ISSET(clients[i], &read_set)) {
-                // le o conteúdo enviado pelo servidor e armazena em recvline
+                // le o conteúdo enviado pelo cliente e armazena em recvline
                 new_s = (int) read_line(clients[i], recvline, MAX_LINE);
 
                 // verifica se a leitura do socket falhou
@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
                     FD_CLR(clients[i], &all_fd_set);
                 } else {
                     strcpy(buf, recvline);
-					
+					char* msg;
 					// A mensagem tem um formato conhecido;
 					// -------------- Lógica do servidor
 					// -------------- -------------- --------------
@@ -147,11 +147,30 @@ int main(int argc, char **argv) {
 						// carros que seguem o cruzamento na direção vertical, de forma que só é preciso checar a velocidade dos
 						// carros horizontais e ajustá-las para que nunca se choquem com carros verticais.
 						
-						// unghh preciso fazer. perdi mt tempo nas funções
+						read_client_message(buf, &(cars[i].length), &(cars[i].direction), &(cars[i].position), &(cars[i].speed));
+                        
+                        if ((cars[i].position > MAX_POS || cars[i].position < 0 || cars[i].speed == 0) && cars[i].direction >= 0) // se o carro andou demais, ou está parado, pode desconectá-lo
+                        {
+                            cars[i].position = cars[i].speed = cars[i].length = cars[i].direction = -1;
+                            clients[i] = -1;
+                            FD_CLR(clients[i], &all_fd_set);
+                        }
+
+                        else if (cars[i].direction == 0) // Se estivermos recebendo uma msg de um carro horizontal
+                        {   // Então queremos checar se ele colide com os verticais
+                            if (check_crash(cars, cars[i], GRID_DEFAULT, n_clients, startTime))
+                            {
+                                if (check_has_crashed(cars, cars[i], GRID_DEFAULT, n_clients))
+                                    msg = "2;2;"; // Houve colisão; chame ambulância!
+                                else
+                                    msg = "2;0;"; // Se não houve colisão, haverá no futuro; então acelere!
+                            }
+
+                        }
 						
 					}
                     // escreve a resposta no socket do cliente
-                    write(clients[i], buf, strlen(buf));
+                    write(clients[i], msg, strlen(msg));
                 }
             }
         }

@@ -1,17 +1,11 @@
 #include "socket_helper.h"
 
-typedef struct car{
-	short int length;
-	short int direction;
-	short int position;
-	long long int speed;
-} Car;
 
 /// Type (0 - entertainment, 1 - comfort/bla, 2 - safety); length ([0, 5]); direction ({0, 1}); position ([0, 50]); speed ([-MAX_LONG_LONG, MAX_LONG_LONG])
-char client_message[] = "%d;%d;%d;%d;%d;";
+// char client_message[] = "%d;%d;%d;%d;%d;";
 
 /// Type (0 - entertainment, 1 - comfort/bla, 2 - safety); action (0 - Accelerate, 1 - Brake, 2 - Call your momma)
-char server_message[] = "%d;%d";
+// char server_message[] = "%d;%d";
 
 // Função que retorna, em time_arrival e time_leaving, o intervalo de tempo em que um carro C ocupa
 // o cruzamento definido pela posição gridPos.
@@ -45,19 +39,39 @@ void times_in_grid(int gridPos, Car c, long int seconds_since_sim_start, double 
 	}
 }
 
-// Função que simplesmente altera a velocidade de um carro. Cliente a utiliza para atualizar o carro ao 
-// receber uma mensagem "Acelere!" do servidor.
-void accelerate(Car *c)
+// Checa se haverá colisão entre o carro horizontal 'cur' e os verticais de 'cars'
+bool check_crash(Car* cars, Car cur, int gridPos, int n_cars, long int startTime) 
 {
-	if (c->speed < 0)
-	{
-		c->speed -= 2;
-	}
-	
-	else // Velocidade nunca vai ser 0; accelerate só é chamada depois de times_in_grid, que já checa isso
-	{
-		c->speed += 2; // Mas se for, aceleramos de qq forma
-	}
+    double time_a_horz, time_l_horz;
+    double time_a_vert, time_l_vert;
+
+    times_in_grid(gridPos, cur, startTime - time(NULL), &time_a_horz, &time_l_horz);
+
+
+    for (int j = 0; j < n_cars; j++)
+    {
+        times_in_grid(gridPos, cars[j], startTime - time(NULL), &time_a_vert, &time_l_vert);
+        if ((time_a_horz > time_a_vert && time_a_horz < time_l_vert) ||
+            (time_l_horz > time_a_vert && time_l_horz < time_l_vert))
+        {
+            return true;
+        }   
+    }
+
+    return false;
+}
+
+bool check_has_crashed(Car* cars, Car cur, int gridPos, int n_cars) 
+{
+    for (int j = 0; j < n_cars; j++)
+    {
+        if (cars[j].position >= cur.position && cars[j].position <= cur.position + cur.length)
+        {
+            return true;
+        }   
+    }
+
+    return false;
 }
 
 void read_client_message(char* msg, short int* len, short int* dir, short int* pos, long long int* spd)
