@@ -5,7 +5,8 @@
 #include <unistd.h>
 
 #include <arpa/inet.h>
-#include "socket_helper.h"
+#include <sys/time.h>
+#include "common.h"
 
 #define LISTENQ 10
 
@@ -33,14 +34,6 @@ int main(int argc, char **argv) {
     struct 			timeval tv;
     Car				cars[FD_SETSIZE];	// onde os dados dos carros são acessados.
     int				crossPosition;		// posição correspondente ao cruzamento em ambas as vias
-    
-    typedef struct car
-    {
-		short int length;
-		short int direction;
-		short int position;
-		long long int speed;
-	} Car;
 
     // configura o valor do endereço IP do servidor
     bzero(&socket_address, sizeof(socket_address));
@@ -72,9 +65,9 @@ int main(int argc, char **argv) {
     // Seta o file descriptor do servidor para observar por dados
     FD_SET(listenfd, &all_fd_set);
 
-	// Começamos a marcar o tempo da simulação.
-	time_t startTime;
-	startTime = time(NULL);
+    // Começamos a marcar o tempo da simulação.
+    time_t startTime;
+    startTime = time(NULL);
 
     // servidor fica aceitando novas conexões enquanto não ocorre erro,
     // porém sequencialmente (trata a comunicação atual antes de esperar pela próxima)
@@ -95,7 +88,7 @@ int main(int argc, char **argv) {
             // Aceita uma nova conexão e salva as informações em connfd
             connfd = Accept(listenfd, (struct sockaddr *) &bound_addr, &len);
 
-            printf("Connected to %d - %s:%d\n", n_clients, inet_ntoa(bound_addr.sin_addr), ntohs(bound_addr.sin_port));
+            printf("Connected to %d - %s:%d\n", n_clients + 1, inet_ntoa(bound_addr.sin_addr), ntohs(bound_addr.sin_port));
 
             // Encontra posicao vazia no vetor de clientes
             for (i = 0; i < FD_SETSIZE; i++) {
@@ -116,7 +109,7 @@ int main(int argc, char **argv) {
         }
 
         for (i = 0; i <= n_clients; i++) {
-            
+
             // Verifica se cliente possui dados a serem lidos
             if (clients[i] >= 0 && FD_ISSET(clients[i], &read_set)) {
                 // le o conteúdo enviado pelo cliente e armazena em recvline
@@ -126,51 +119,68 @@ int main(int argc, char **argv) {
                 if (new_s < 0) {
                     // imprime a informação do erro e termina o programa
                     perror("Error in client communication");
-                    exit(1);
                 } else if (new_s == 0) {
                     // remove cliente do vetor de clientes
                     clients[i] = -1;
                     FD_CLR(clients[i], &all_fd_set);
                 } else {
                     strcpy(buf, recvline);
-					char* msg;
-					// A mensagem tem um formato conhecido;
-					// -------------- Lógica do servidor
-					// -------------- -------------- --------------
-					// -------------- -------------- --------------
-                    
-                    if (buf[0] == '0' || buf[1] == '1') // Se o servidor estiver recebendo uma resposta a uma mensagem de entretenimento ou conforto,
-						continue;					// Não é necessário fazer coisa alguma
-					else if (buf[0] == '2')			// Mas se for uma resposta de segurança, precisamos fazer os checks corretos
-					{
-						// Como decisão de design da solução, adotamos a postura de que não é necessário alterar a velocidade dos
-						// carros que seguem o cruzamento na direção vertical, de forma que só é preciso checar a velocidade dos
-						// carros horizontais e ajustá-las para que nunca se choquem com carros verticais.
-						
-						read_client_message(buf, &(cars[i].length), &(cars[i].direction), &(cars[i].position), &(cars[i].speed));
-                        
-                        if ((cars[i].position > MAX_POS || cars[i].position < 0 || cars[i].speed == 0) && cars[i].direction >= 0) // se o carro andou demais, ou está parado, pode desconectá-lo
-                        {
+                    char* msg;
+
+                    if (buf[0] == '0' || buf[1] == '1') {
+                        // Se o servidor estiver recebendo uma resposta a uma mensagem de entretenimento ou conforto,
+                        // Não é necessário fazer coisa alguma
+                        continue;
+                    } else if (buf[0] == '2') {
+                        // Mas se for uma resposta de segurança, precisamos fazer os checks corretos
+
+                        // Como decisão de design da solução, adotamos a postura de que não é necessário alterar a velocidade dos
+                        // carros que seguem o cruzamento na direção vertical, de forma que só é preciso checar a velocidade dos
+                        // carros horizontais e ajustá-las para que nunca se choquem com carros verticais.
+                        sscanf(&buf[2],
+                               "%hu;%hu;%hu;%lld;\n",
+                               &(cars[i].length),
+                               &(cars[i].direction),
+                               &(cars[i].position),
+                               &(cars[i].speed));
+
+                        printf("Car %d: %hu;%hu;%hu;%lld;\n", i,
+                               cars[i].length,
+                               cars[i].direction,
+                               cars[i].position,
+                               cars[i].speed);
+
+                        cars[i].initial_time = current_time();
+
+                        // se o carro andou demais, ou está parado, pode desconectá-lo
+                        if ((cars[i].position > MAX_POS ||
+                                cars[i].position <   0 ||
+                                cars[i].speed == 0)
+                            && cars[i].direction >= 0) {
                             cars[i].position = cars[i].speed = cars[i].length = cars[i].direction = -1;
-                            clients[i] = -1;
                             FD_CLR(clients[i], &all_fd_set);
-                        }
+                            clients[i] = -1;
+                        } else if (cars[i].direction == 0) {
+                            // Se estivermos recebendo uma msg de um carro horizontal
+                            // Então queremos checar se ele colide com os verticais
 
-                        else if (cars[i].direction == 0) // Se estivermos recebendo uma msg de um carro horizontal
-                        {   // Então queremos checar se ele colide com os verticais
-                            if (check_crash(cars, cars[i], GRID_DEFAULT, n_clients, startTime))
-                            {
-                                if (check_has_crashed(cars, cars[i], GRID_DEFAULT, n_clients))
-                                    msg = "2;2;"; // Houve colisão; chame ambulância!
-                                else
-                                    msg = "2;0;"; // Se não houve colisão, haverá no futuro; então acelere!
+                            if (check_crash(cars, cars[i], GRID_DEFAULT, n_clients)) {
+
+                                if (check_has_crashed(cars, cars[i], n_clients)) {
+                                    // Houve colisão; chame ambulância!
+                                    msg = "2;2;";
+                                } else {
+                                    // Se não houve colisão, possivelmente haverá no futuro; então acelere!
+                                    msg = "2;0;";
+                                }
+
+                                // escreve a resposta no socket do cliente
+                                write(clients[i], msg, strlen(msg));
+                            } else {
+                                printf("Client is safe: %d\n", i);
                             }
-
                         }
-						
-					}
-                    // escreve a resposta no socket do cliente
-                    write(clients[i], msg, strlen(msg));
+                    }
                 }
             }
         }

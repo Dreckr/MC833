@@ -11,23 +11,20 @@
 typedef int bool;
 enum { false, true };
 
-typedef struct car{
-	short int length;
-	short int direction; // 1 vertical, 0 horizontal
-	short int position;
-	long long int speed;
+typedef struct car {
+    short int length;
+    short int direction; // 1 vertical, 0 horizontal
+    short int position;
+    long long int speed;
+    int initial_time;
 } Car;
 
 
-void times_in_grid(int gridPos, Car c, long int seconds_since_sim_start, double *time_arrival, double *time_leaving);
+void times_in_grid(int gridPos, Car c, double *time_arrival, double *time_leaving);
 
-bool check_crash(Car* cars, Car cur, int gridPos, int n_cars, long int startTime);
+bool check_crash(Car* cars, Car cur, int gridPos, int n_cars);
 
-bool check_has_crashed(Car* cars, Car cur, int gridPos, int n_cars);
-
-void read_client_message(char* msg, short int* len, short int* dir, short int* pos, long long int* spd);
-
-
+bool check_has_crashed(Car* cars, Car cur, int n_cars);
 
 int Socket(int family, int type, int flags);
 
@@ -47,3 +44,5 @@ int Accept(int sockfd,
           socklen_t *socklen);
 
 ssize_t read_line(int fd, void *buffer, size_t n);
+
+int current_time();

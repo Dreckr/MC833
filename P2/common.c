@@ -1,106 +1,84 @@
-#include "socket_helper.h"
+#include <sys/time.h>
+#include "common.h"
 
-
+/// Protocolo de mensagens entre cliente e servidor:
+///
+/// Mensagens enviadas pelo cliente:
 /// Type (0 - entertainment, 1 - comfort/bla, 2 - safety); length ([0, 5]); direction ({0, 1}); position ([0, 50]); speed ([-MAX_LONG_LONG, MAX_LONG_LONG])
-// char client_message[] = "%d;%d;%d;%d;%d;";
-
-/// Type (0 - entertainment, 1 - comfort/bla, 2 - safety); action (0 - Accelerate, 1 - Brake, 2 - Call your momma)
-// char server_message[] = "%d;%d";
+///
+/// Mensagens enviadas pelo servidor:
+/// Type (0 - entertainment, 1 - comfort/bla, 2 - safety); action (0 - Accelerate, 1 - Brake, 2 - Call ambulance)
 
 // Função que retorna, em time_arrival e time_leaving, o intervalo de tempo em que um carro C ocupa
 // o cruzamento definido pela posição gridPos.
-void times_in_grid(int gridPos, Car c, long int seconds_since_sim_start, double *time_arrival, double *time_leaving)
-{
-	// Presume-se que a posição do carro é o quadrado mais pro seu fundo, de forma que ele ocupa
-	// as posições [position, position + length]
-	if (c.speed > 0) // Os calculos sao meio diferentes
-	{
-		int distToGrid 	= gridPos - c.position;
-		distToGrid 		-= c.length - 1;
-		
-		double timeIn = seconds_since_sim_start;
-		*time_arrival = timeIn + (float)distToGrid / c.speed;
-		*time_leaving = *time_arrival + ((float)(c.length + 1)/(float)c.speed); 
-	}
-	
-	else if (c.speed < 0) // Pra velocidades positivas e negativas, ja q a posicao é sempre a "bunda" do carro
-	{
-		int distToGrid 	= c.position - (gridPos + 1);
-		
-		double timeIn = seconds_since_sim_start;
-		*time_arrival = timeIn - (float)distToGrid / c.speed;
-		*time_leaving = *time_arrival - ((float)(c.length + 1)/(float)c.speed); 
-	}
-	
-	else // velocidade = 0
-	{
-		*time_arrival = -1;
-		*time_leaving = -1; // Vai ter codigo para, se o tempo for negativo, mandar chamar a ambulancia
-	}
+void times_in_grid(int gridPos, Car c, double *time_arrival, double *time_leaving) {
+
+    // Presume-se que a posição do carro é o quadrado mais pro seu fundo, de forma que ele ocupa
+    // as posições [position, position + length]
+    if (c.speed > 0) {
+
+        int distToGrid = gridPos - c.position;
+        distToGrid -= c.length - 1;
+
+        *time_arrival = c.initial_time + (float)distToGrid / c.speed;
+        *time_leaving = *time_arrival + ((float)(c.length + 1) / (float)c.speed);
+
+    } else if (c.speed < 0) {
+
+        // Para velocidades positivas e negativas, ja que a posicao é sempre a traseira do carro
+        int distToGrid = c.position - (gridPos + 1);
+
+        *time_arrival = c.initial_time - (float)distToGrid / c.speed;
+        *time_leaving = *time_arrival - ((float)(c.length + 1)/(float)c.speed);
+
+    } else {
+
+        *time_arrival = -1;
+        *time_leaving = -1; // Vai ter codigo para, se o tempo for negativo, mandar chamar a ambulancia
+
+    }
 }
 
 // Checa se haverá colisão entre o carro horizontal 'cur' e os verticais de 'cars'
-bool check_crash(Car* cars, Car cur, int gridPos, int n_cars, long int startTime) 
-{
+bool check_crash(Car* cars, Car cur, int gridPos, int n_cars) {
     double time_a_horz, time_l_horz;
     double time_a_vert, time_l_vert;
 
-    times_in_grid(gridPos, cur, startTime - time(NULL), &time_a_horz, &time_l_horz);
+    times_in_grid(gridPos, cur, &time_a_horz, &time_l_horz);
 
+    for (int j = 0; j < n_cars; j++) {
 
-    for (int j = 0; j < n_cars; j++)
-    {
-        times_in_grid(gridPos, cars[j], startTime - time(NULL), &time_a_vert, &time_l_vert);
+        times_in_grid(gridPos, cars[j], &time_a_vert, &time_l_vert);
+
         if ((time_a_horz > time_a_vert && time_a_horz < time_l_vert) ||
-            (time_l_horz > time_a_vert && time_l_horz < time_l_vert))
-        {
+            (time_l_horz > time_a_vert && time_l_horz < time_l_vert)) {
             return true;
-        }   
+        }
     }
 
     return false;
 }
 
-bool check_has_crashed(Car* cars, Car cur, int gridPos, int n_cars) 
-{
-    for (int j = 0; j < n_cars; j++)
-    {
-        if (cars[j].position >= cur.position && cars[j].position <= cur.position + cur.length)
-        {
+bool check_has_crashed(Car* cars, Car cur, int n_cars) {
+
+    for (int j = 0; j < n_cars; j++) {
+
+        if (cars[j].position >= cur.position && cars[j].position <= cur.position + cur.length) {
             return true;
-        }   
+        }
     }
 
     return false;
 }
 
-void read_client_message(char* msg, short int* len, short int* dir, short int* pos, long long int* spd)
-{
-	// Sabemos que a estrutura da mensagem é "%d;%d;%d;%d;%d", então os dois primeiros caracteres já terão sido
-	// lidos quando esta função for chamada. Lemos então a partir de i = 2.
-	int ind_0 = 0;
-	int ind_1 = 0;
-	long long int vals[4];
-	for (int i = 2; msg[i] != '\0'; i++)
-	{
-		char substr[20];
-		if (msg[i] != ';')
-		{
-			substr[ind_0] = msg[i];
-			ind_0++;
-		}
-		else
-		{
-			substr[ind_0] = '\0';
-			ind_0 = 0;
-			vals[ind_1] = atoi(substr);
-		}
-	}
-	
-	*len = vals[0];
-	*dir = vals[1];
-	*pos = vals[2];
-	*spd = vals[3];
+int current_time() {
+    struct timeval te;
+
+    gettimeofday(&te, NULL);
+
+    long long milliseconds = te.tv_sec * 1000LL + te.tv_usec / 1000;
+
+    return (int) (milliseconds / 60000);
 }
 
 int Socket(int family, int type, int flags) {
